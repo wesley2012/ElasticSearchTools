@@ -23,7 +23,7 @@ public class CommandClear extends Command {
             throw new RuntimeException("Bad arguments");
         }
         esURL = ElasticSearchURL.valueOf(args[0]);
-        if (esURL.index == null || esURL.type == null){
+        if (esURL.index == null){
             throw new RuntimeException("URL format: http://host/index/type");
         }
     }
@@ -34,8 +34,11 @@ public class CommandClear extends Command {
         String index = esURL.index;
         String type = esURL.type;
 
-        DeleteByQueryRequestBuilder deleteByQueryRequestBuilder = client.prepareDeleteByQuery(index).setTypes(type)
-                .setQuery(QueryBuilders.matchAllQuery());
+        DeleteByQueryRequestBuilder deleteByQueryRequestBuilder = client.prepareDeleteByQuery(index);
+        if (type != null) {
+            deleteByQueryRequestBuilder.setTypes(type);
+        }
+        deleteByQueryRequestBuilder.setQuery(QueryBuilders.matchAllQuery());
         DeleteByQueryResponse response = deleteByQueryRequestBuilder.get();
         if (response.status().getStatus() == 200){
             System.err.println("OK");

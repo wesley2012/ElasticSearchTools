@@ -55,7 +55,7 @@ public class ElasticSearchURL {
 
         TransportClient client = new TransportClient(builder.build());
 
-        Pattern pattern = Pattern.compile("inet\\[/([0-9\\.]+):([0-9]+)\\]");
+        Pattern pattern = Pattern.compile("inet\\[.*/([0-9\\.]+):([0-9]+)\\]");
         JSONObject nodes = jsonObject.getJSONObject("nodes");
         for (String key: nodes.keySet()){
             JSONObject node = nodes.getJSONObject(key);

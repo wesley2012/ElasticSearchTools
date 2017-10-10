@@ -40,12 +40,18 @@ public class CommandCopy extends Command {
             throw new RuntimeException("Bad arguments");
         }
         srcElasticSearchURL = ElasticSearchURL.valueOf(args[0]);
-        if (srcElasticSearchURL.index == null || srcElasticSearchURL.type == null){
-            throw new RuntimeException("Source URL format: http://host/index/type");
+        if (srcElasticSearchURL.index == null){
+            throw new RuntimeException("Source URL format: http://host/index/type or http://host/index");
         }
         dstElasticSearchURL = ElasticSearchURL.valueOf(args[1]);
-        if (dstElasticSearchURL.index == null || dstElasticSearchURL.type == null) {
-            throw new RuntimeException("Target URL format: http://host/index/type");
+        if (dstElasticSearchURL.index == null) {
+            throw new RuntimeException("Target URL format: http://host/index/type or http://host/index");
+        }
+        if (srcElasticSearchURL.type == null && dstElasticSearchURL.type != null){
+            throw new RuntimeException("Please specify the source index type");
+        }
+        if (srcElasticSearchURL.type != null && dstElasticSearchURL.type == null){
+            dstElasticSearchURL.type = srcElasticSearchURL.type;
         }
     }
 
@@ -55,10 +61,12 @@ public class CommandCopy extends Command {
         SearchResponse response;
 
         SearchRequestBuilder srb = srcElasticSearchURL.client.prepareSearch(srcElasticSearchURL.index)
-                .setTypes(srcElasticSearchURL.type)
                 .setSearchType(SearchType.SCAN)
                 .setScroll(TimeValue.timeValueMinutes(5))
                 .setSize(50);
+        if (srcElasticSearchURL.type != null){
+            srb.setTypes(srcElasticSearchURL.type);
+        }
         response = srb.get();
         if (!response.status().equals((RestStatus.OK))){
             System.err.println("Bad status: " + response.status().toString());
@@ -83,19 +91,23 @@ public class CommandCopy extends Command {
             for (SearchHit hit: hits){
                 Map<String, Object> source = hit.getSource();
                 String id = hit.getId();
-                save(id, source);
+                String type = hit.getType();
+                save(type, id, source);
             }
             flush();
         }
         System.exit(failed ? 1 : 0);
     }
 
-    void save(String id, Map<String, Object> source){
+    void save(String type, String id, Map<String, Object> source){
         if (bulk == null) {
             bulk = dstElasticSearchURL.client.prepareBulk();
             requestSize = 0;
         }
-        bulk.add(dstElasticSearchURL.client.prepareIndex(dstElasticSearchURL.index, dstElasticSearchURL.type, id).setSource(source));
+        if (dstElasticSearchURL.type != null){
+            type = dstElasticSearchURL.type;
+        }
+        bulk.add(dstElasticSearchURL.client.prepareIndex(dstElasticSearchURL.index, type, id).setSource(source));
         requestSize++;
         total++;
         if (requestSize == 50){

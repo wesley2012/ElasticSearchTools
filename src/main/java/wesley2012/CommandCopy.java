@@ -59,35 +59,35 @@ public class CommandCopy extends Command {
     void exec() {
         String scrollId = null;
         SearchResponse response;
-
-        SearchRequestBuilder srb = srcElasticSearchURL.client.prepareSearch(srcElasticSearchURL.index)
-                .setSearchType(SearchType.SCAN)
-                .setScroll(TimeValue.timeValueMinutes(5))
-                .setSize(50);
-        if (srcElasticSearchURL.type != null){
-            srb.setTypes(srcElasticSearchURL.type);
-        }
-        response = srb.get();
-        if (!response.status().equals((RestStatus.OK))){
-            System.err.println("Bad status: " + response.status().toString());
-            System.exit(1);
-        }
-        scrollId = response.getScrollId();
+        SearchHit[] hits;
 
         while (true) {
-            SearchScrollRequestBuilder ssrb = srcElasticSearchURL.client.prepareSearchScroll(scrollId)
-                    .setScroll(TimeValue.timeValueMinutes(5));
-            response = ssrb.get();
-            if (!response.status().equals((RestStatus.OK))){
-                System.err.println("Bad status: " + response.status().toString());
-                break;
+            if (scrollId == null) {
+                SearchRequestBuilder srb = srcElasticSearchURL.client.prepareSearch(srcElasticSearchURL.index)
+                        .setSearchType(SearchType.SCAN)
+                        .setScroll(TimeValue.timeValueMinutes(5))
+                        .setSize(50);
+                if (srcElasticSearchURL.type != null) {
+                    srb.setTypes(srcElasticSearchURL.type);
+                }
+                response = srb.get();
+                hits = response.getHits().getHits();
+                scrollId = response.getScrollId();
+                if (hits.length == 0){
+                    continue;
+                }
+            }
+            else {
+                SearchScrollRequestBuilder ssrb = srcElasticSearchURL.client.prepareSearchScroll(scrollId)
+                        .setScroll(TimeValue.timeValueMinutes(5));
+                response = ssrb.get();
+                hits = response.getHits().getHits();
+                scrollId = response.getScrollId();
+                if (hits.length == 0){
+                    break;
+                }
             }
 
-            scrollId = response.getScrollId();
-            SearchHit[] hits = response.getHits().getHits();
-            if (hits.length == 0){
-                break;
-            }
             for (SearchHit hit: hits){
                 Map<String, Object> source = hit.getSource();
                 String id = hit.getId();
@@ -96,6 +96,10 @@ public class CommandCopy extends Command {
             }
             flush();
         }
+        if (scrollId != null){
+            srcElasticSearchURL.client.prepareClearScroll().addScrollId(scrollId).get();
+        }
+
         System.exit(failed ? 1 : 0);
     }
 
